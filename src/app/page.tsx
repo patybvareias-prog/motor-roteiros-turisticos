@@ -23,85 +23,68 @@ import {
   Sparkles,
   Timer,
   Zap,
-  TrendingUp
+  TrendingUp,
+  Check,
+  AlertCircle
 } from 'lucide-react';
 
-// Dados mockados para desenvolvimento
-const MOCK_DATA = {
-  destino: "Gramado - RS",
-  diasViagem: 5,
-  roteiroGerado: [
-    {
-      dia: 1,
-      manha: "Visita ao Lago Negro + pedalinho",
-      almoco: "Restaurante Colosseo (culinária italiana)",
-      tarde: "Passeio na Rua Coberta + lojas de chocolate",
-      jantar: "Bouquet Garni (fondue completo)"
-    },
-    {
-      dia: 2,
-      manha: "Mini Mundo",
-      almoco: "Cantina Di Capo",
-      tarde: "Tour em fábricas de chocolate + Reino do Chocolate",
-      jantar: "Maison Mulller (sequência de fondue)"
-    },
-    {
-      dia: 3,
-      manha: "Parque Snowland (atividades na neve)",
-      almoco: "Bêrga Motta (dentro do Snowland)",
-      tarde: "Mirante do Vale + fotos panorâmicas",
-      jantar: "Malbec Restaurante (carnes nobres)"
-    },
-    {
-      dia: 4,
-      manha: "Le Jardin – Parque de Lavanda",
-      almoco: "Carazal (café colonial da Serra Gaúcha)",
-      tarde: "Tour na Cervejaria Rasen Bier",
-      jantar: "Chateau de La Fondue"
-    },
-    {
-      dia: 5,
-      manha: "Passeio em Canela – Catedral de Pedra",
-      almoco: "Empório Canela",
-      tarde: "Parque do Caracol + Cascata",
-      jantar: "Magnólia Restaurante e Cinema"
-    }
-  ]
-};
-
+// ===== TIPOS E INTERFACES =====
 type Section = 'roteiro' | 'parques' | 'gastronomia' | 'instagramaveis' | 'hospedagem' | 'vinhos' | 'cidade' | 'kids' | 'premium';
 type Ritmo = 'leve' | 'moderada' | 'intensa';
 
 interface Atracao {
   id: string;
-  nome: string;
+  titulo: string;
   descricao: string;
   categoria: string;
+  city: string; // CRÍTICO: filtro por cidade
   horario: string;
   localizacao: string;
-  tempoMinimo: number; // em horas
-  tempoMedio: number;
-  tempoMaximo: number;
+  tempo_minimo: number; // em horas
+  tempo_medio: number;
+  tempo_maximo: number;
   detalhes?: string;
   dicas?: string[];
 }
 
 interface AtracaoSelecionada extends Atracao {
-  tempoEscolhido: number;
+  tempo_escolhido: number;
 }
 
-// Dados das atrações de PARQUES com tempo
-const ATRACOES_PARQUES: Atracao[] = [
+interface AtividadeAgendada {
+  id: string;
+  titulo: string;
+  tempo_medio: number;
+  inicio: string;
+  fim: string;
+}
+
+interface DiaRoteiro {
+  dia: number;
+  atividades: AtividadeAgendada[];
+  tempo_total: number;
+}
+
+interface RoteiroOtimizado {
+  dias: DiaRoteiro[];
+  pendentes: string[];
+  avisos: string[];
+}
+
+// ===== DADOS MOCKADOS (Simulando API) =====
+const ATRACOES_DISPONIVEIS: Atracao[] = [
+  // PARQUES
   {
     id: 'snowland',
-    nome: 'Snowland',
+    titulo: 'Snowland',
     descricao: 'Parque temático de neve com diversas atividades como esqui, snowboard e patinação no gelo. Perfeito para toda a família.',
     categoria: 'parques',
+    city: 'Gramado',
     horario: '10:00 - 18:00',
     localizacao: 'Rua da Neve, 123',
-    tempoMinimo: 2,
-    tempoMedio: 3.5,
-    tempoMaximo: 5,
+    tempo_minimo: 2,
+    tempo_medio: 3.5,
+    tempo_maximo: 5,
     detalhes: 'O Snowland é o único parque de neve indoor da América Latina. Temperatura de -5°C o ano todo.',
     dicas: [
       'Chegue cedo para evitar filas',
@@ -112,14 +95,15 @@ const ATRACOES_PARQUES: Atracao[] = [
   },
   {
     id: 'minimundo',
-    nome: 'Mini Mundo',
+    titulo: 'Mini Mundo',
     descricao: 'Réplicas em miniatura de construções famosas da Europa. Ideal para fotos e passeio em família com crianças.',
     categoria: 'parques',
+    city: 'Gramado',
     horario: '09:00 - 17:30',
     localizacao: 'Rua Horácio Cardoso, 291',
-    tempoMinimo: 1,
-    tempoMedio: 2,
-    tempoMaximo: 3,
+    tempo_minimo: 1,
+    tempo_medio: 2,
+    tempo_maximo: 3,
     detalhes: 'Mais de 24 réplicas em escala 1:24 de castelos, igrejas e construções europeias.',
     dicas: [
       'Melhor horário: manhã para fotos com luz natural',
@@ -130,14 +114,15 @@ const ATRACOES_PARQUES: Atracao[] = [
   },
   {
     id: 'caracol',
-    nome: 'Parque do Caracol',
+    titulo: 'Parque do Caracol',
     descricao: 'Cascata de 131 metros de altura com trilhas ecológicas e mirantes. Vista espetacular da natureza da Serra Gaúcha.',
     categoria: 'parques',
+    city: 'Canela', // NÃO É GRAMADO - deve ser filtrado
     horario: '08:30 - 17:30',
     localizacao: 'Rodovia RS-466, Canela',
-    tempoMinimo: 1.5,
-    tempoMedio: 2.5,
-    tempoMaximo: 4,
+    tempo_minimo: 1.5,
+    tempo_medio: 2.5,
+    tempo_maximo: 4,
     detalhes: 'Uma das cascatas mais famosas do Brasil. Trilha com 927 degraus até a base da cachoeira.',
     dicas: [
       'Use calçados confortáveis para trilha',
@@ -145,48 +130,60 @@ const ATRACOES_PARQUES: Atracao[] = [
       'Opção de teleférico para quem não quer descer',
       'Vista panorâmica incrível do mirante superior'
     ]
+  },
+  // GASTRONOMIA
+  {
+    id: 'colosseo',
+    titulo: 'Colosseo Restaurante',
+    descricao: 'Culinária italiana autêntica com massas artesanais e ambiente acolhedor. Especialidade em risotos e carnes.',
+    categoria: 'gastronomia',
+    city: 'Gramado',
+    horario: '12:00 - 23:00',
+    localizacao: 'Centro de Gramado',
+    tempo_minimo: 1,
+    tempo_medio: 1.5,
+    tempo_maximo: 2
+  },
+  {
+    id: 'bouquet',
+    titulo: 'Bouquet Garni',
+    descricao: 'Fondue completo (queijo, carne e chocolate) em ambiente romântico. Perfeito para casais e ocasiões especiais.',
+    categoria: 'gastronomia',
+    city: 'Gramado',
+    horario: '19:00 - 23:30',
+    localizacao: 'Av. Borges de Medeiros',
+    tempo_minimo: 1.5,
+    tempo_medio: 2,
+    tempo_maximo: 3
   }
 ];
 
 export default function Home() {
-  const [dadosRoteiro, setDadosRoteiro] = useState<typeof MOCK_DATA | null>(null);
-  const [diaSelecionado, setDiaSelecionado] = useState(1);
+  // ===== ESTADOS =====
   const [secaoAtiva, setSecaoAtiva] = useState<Section>('roteiro');
   const [atracaoModal, setAtracaoModal] = useState<Atracao | null>(null);
   const [atracoesPendentes, setAtracoesPendentes] = useState<AtracaoSelecionada[]>([]);
+  const [atracoesAgendadas, setAtracoesAgendadas] = useState<AtracaoSelecionada[]>([]);
   const [ritmo, setRitmo] = useState<Ritmo>('moderada');
+  const [roteiroOtimizado, setRoteiroOtimizado] = useState<RoteiroOtimizado | null>(null);
+  const [duracaoViagem, setDuracaoViagem] = useState(3); // dias
+  const [carregandoOtimizacao, setCarregandoOtimizacao] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Tenta buscar dados reais do sessionStorage/localStorage
-    const dadosReais = typeof window !== 'undefined' 
-      ? sessionStorage.getItem('dadosTriagem') || localStorage.getItem('dadosTriagem')
-      : null;
+  // ===== FILTRAR APENAS ATRAÇÕES DE GRAMADO =====
+  const atracoesGramado = ATRACOES_DISPONIVEIS.filter(a => a.city === 'Gramado');
 
-    if (dadosReais) {
-      try {
-        const parsed = JSON.parse(dadosReais);
-        setDadosRoteiro(parsed);
-      } catch (error) {
-        console.log('Usando dados mockados (erro ao parsear dados reais)');
-        setDadosRoteiro(MOCK_DATA);
-      }
-    } else {
-      // Se não houver dados reais, usa os mockados
-      console.log('Usando dados mockados para desenvolvimento');
-      setDadosRoteiro(MOCK_DATA);
-    }
-  }, []);
-
-  // Cálculo do tempo disponível
+  // ===== CÁLCULO DO TEMPO DISPONÍVEL =====
   const calcularTempoDisponivel = () => {
-    if (!dadosRoteiro) return { total: 0, usado: 0, restante: 0 };
-    
     // 8h por dia (9h-17h) - 1h almoço = 7h úteis por dia
     const horasPorDia = 7;
-    const totalHoras = horasPorDia * dadosRoteiro.diasViagem;
+    const totalHoras = horasPorDia * duracaoViagem;
     
-    // Soma o tempo das atrações pendentes
-    const horasUsadas = atracoesPendentes.reduce((acc, atracao) => acc + atracao.tempoEscolhido, 0);
+    // Soma o tempo das atrações pendentes + agendadas
+    const horasUsadas = [...atracoesPendentes, ...atracoesAgendadas].reduce(
+      (acc, atracao) => acc + atracao.tempo_escolhido, 
+      0
+    );
     
     return {
       total: totalHoras,
@@ -198,42 +195,153 @@ export default function Home() {
   const tempoDisponivel = calcularTempoDisponivel();
   const percentualUsado = (tempoDisponivel.usado / tempoDisponivel.total) * 100;
 
+  // ===== ADICIONAR ATRAÇÃO AOS PENDENTES =====
   const adicionarAtracao = (atracao: Atracao) => {
+    // Validação: só aceita atrações de Gramado
+    if (atracao.city !== 'Gramado') {
+      setErro('Apenas atrações de Gramado podem ser adicionadas ao roteiro.');
+      setTimeout(() => setErro(null), 3000);
+      return;
+    }
+
     // Define o tempo baseado no ritmo escolhido
-    let tempoEscolhido = atracao.tempoMedio;
-    if (ritmo === 'leve') tempoEscolhido = atracao.tempoMaximo;
-    if (ritmo === 'intensa') tempoEscolhido = atracao.tempoMinimo;
+    let tempo_escolhido = atracao.tempo_medio;
+    if (ritmo === 'leve') tempo_escolhido = atracao.tempo_maximo;
+    if (ritmo === 'intensa') tempo_escolhido = atracao.tempo_minimo;
 
     const novaAtracao: AtracaoSelecionada = {
       ...atracao,
-      tempoEscolhido
+      tempo_escolhido
     };
 
     setAtracoesPendentes([...atracoesPendentes, novaAtracao]);
     setAtracaoModal(null);
   };
 
+  // ===== REMOVER ATRAÇÃO DOS PENDENTES =====
   const removerAtracao = (id: string) => {
     setAtracoesPendentes(atracoesPendentes.filter(a => a.id !== id));
   };
 
-  const otimizarRoteiro = () => {
-    alert('Funcionalidade de otimização será implementada em breve! Por enquanto, as atrações estão organizadas na ordem que você adicionou.');
+  // ===== OTIMIZAR ROTEIRO (Integração com IA) =====
+  const otimizarRoteiro = async () => {
+    if (atracoesPendentes.length === 0) {
+      setErro('Adicione pelo menos uma atração antes de otimizar o roteiro.');
+      setTimeout(() => setErro(null), 3000);
+      return;
+    }
+
+    setCarregandoOtimizacao(true);
+    setErro(null);
+
+    try {
+      // Preparar JSON de entrada conforme especificação
+      const entrada = {
+        tipo_requisicao: 'otimizar',
+        duracao_viagem: duracaoViagem,
+        ritmo: ritmo,
+        atracoes_disponiveis: atracoesGramado.map(a => ({
+          id: a.id,
+          titulo: a.titulo,
+          categoria: a.categoria,
+          tempo_medio: a.tempo_medio,
+          city: a.city
+        })),
+        atracoes_pendentes: atracoesPendentes.map(a => a.id),
+        atracoes_agendadas: atracoesAgendadas.map(a => ({
+          id: a.id,
+          titulo: a.titulo,
+          tempo_medio: a.tempo_escolhido
+        }))
+      };
+
+      // Simular chamada à API (substituir por chamada real)
+      const response = await simularChamadaIA(entrada);
+
+      if (response.error) {
+        setErro(response.error);
+      } else {
+        setRoteiroOtimizado(response);
+        // Move pendentes para agendados
+        setAtracoesAgendadas([...atracoesAgendadas, ...atracoesPendentes]);
+        setAtracoesPendentes([]);
+      }
+    } catch (error) {
+      setErro('Erro ao otimizar roteiro. Tente novamente.');
+      console.error(error);
+    } finally {
+      setCarregandoOtimizacao(false);
+    }
   };
 
-  if (!dadosRoteiro) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando seu roteiro...</p>
-        </div>
-      </div>
-    );
-  }
+  // ===== SIMULAÇÃO DE CHAMADA À IA (Substituir por API real) =====
+  const simularChamadaIA = async (entrada: any): Promise<RoteiroOtimizado | { error: string }> => {
+    // Simula delay de API
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-  const diaAtual = dadosRoteiro.roteiroGerado[diaSelecionado - 1];
+    // Validação: se nenhuma atração for de Gramado
+    const atracoesGramadoCount = entrada.atracoes_disponiveis.filter(
+      (a: any) => a.city === 'Gramado'
+    ).length;
 
+    if (atracoesGramadoCount === 0) {
+      return { error: 'Sem atrações de Gramado' };
+    }
+
+    // Simula resposta da IA
+    const diasRoteiro: DiaRoteiro[] = [];
+    let horaInicio = 9; // 9h da manhã
+
+    for (let dia = 1; dia <= entrada.duracao_viagem; dia++) {
+      const atividadesDia: AtividadeAgendada[] = [];
+      let tempoTotalDia = 0;
+
+      // Pega algumas atrações pendentes para este dia
+      const atracoesDia = entrada.atracoes_pendentes.slice(
+        (dia - 1) * 2, 
+        dia * 2
+      );
+
+      atracoesDia.forEach((idAtracao: string) => {
+        const atracao = atracoesPendentes.find(a => a.id === idAtracao);
+        if (atracao && tempoTotalDia + atracao.tempo_escolhido <= 7) {
+          const inicio = `${Math.floor(horaInicio)}:${(horaInicio % 1) * 60 || '00'}`;
+          horaInicio += atracao.tempo_escolhido;
+          const fim = `${Math.floor(horaInicio)}:${(horaInicio % 1) * 60 || '00'}`;
+
+          atividadesDia.push({
+            id: atracao.id,
+            titulo: atracao.titulo,
+            tempo_medio: atracao.tempo_escolhido,
+            inicio,
+            fim
+          });
+
+          tempoTotalDia += atracao.tempo_escolhido;
+        }
+      });
+
+      diasRoteiro.push({
+        dia,
+        atividades: atividadesDia,
+        tempo_total: tempoTotalDia
+      });
+
+      horaInicio = 9; // Reset para próximo dia
+    }
+
+    return {
+      dias: diasRoteiro,
+      pendentes: entrada.atracoes_pendentes.slice(entrada.duracao_viagem * 2),
+      avisos: [
+        'Roteiro otimizado considerando horários de funcionamento',
+        'Lembre-se de reservar restaurantes com antecedência',
+        'Tempo de deslocamento não incluído - adicione 15-30min entre atrações'
+      ]
+    };
+  };
+
+  // ===== NAVEGAÇÃO =====
   const secoes = [
     { id: 'roteiro' as Section, nome: 'Roteiro', icon: Calendar },
     { id: 'parques' as Section, nome: 'Parques', icon: TreePine },
@@ -255,11 +363,11 @@ export default function Home() {
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-3">
                 <MapPin className="text-indigo-600" size={32} />
-                Seu Roteiro Personalizado
+                Lasy - Roteiro Gramado
               </h1>
               <p className="text-gray-600 mt-2 flex items-center gap-2">
                 <Calendar size={18} />
-                {dadosRoteiro.destino} • {dadosRoteiro.diasViagem} dias
+                Gramado - RS • {duracaoViagem} dias
               </p>
             </div>
           </div>
@@ -291,10 +399,43 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Mensagem de Erro */}
+      {erro && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+          <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg flex items-center gap-3">
+            <AlertCircle className="text-red-500" size={24} />
+            <p className="text-red-700 font-semibold">{erro}</p>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Seção: ROTEIRO */}
         {secaoAtiva === 'roteiro' && (
           <div className="space-y-8">
+            {/* Controle de Duração da Viagem */}
+            <div className="bg-white rounded-xl shadow-lg p-6">
+              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <Calendar className="text-indigo-600" size={24} />
+                Duração da Viagem
+              </h2>
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setDuracaoViagem(Math.max(1, duracaoViagem - 1))}
+                  className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-all font-bold"
+                >
+                  -
+                </button>
+                <div className="text-3xl font-bold text-indigo-600">{duracaoViagem} dias</div>
+                <button
+                  onClick={() => setDuracaoViagem(Math.min(10, duracaoViagem + 1))}
+                  className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 transition-all font-bold"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
             {/* Controle de Ritmo */}
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -388,10 +529,24 @@ export default function Home() {
                   </h2>
                   <button
                     onClick={otimizarRoteiro}
-                    className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-6 py-3 rounded-lg font-bold hover:from-indigo-700 hover:to-purple-700 transition-all shadow-lg hover:shadow-xl"
+                    disabled={carregandoOtimizacao}
+                    className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold transition-all shadow-lg hover:shadow-xl ${
+                      carregandoOtimizacao
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700'
+                    }`}
                   >
-                    <TrendingUp size={20} />
-                    Otimizar Roteiro
+                    {carregandoOtimizacao ? (
+                      <>
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        Otimizando...
+                      </>
+                    ) : (
+                      <>
+                        <TrendingUp size={20} />
+                        Otimizar Roteiro
+                      </>
+                    )}
                   </button>
                 </div>
                 <div className="space-y-3">
@@ -401,10 +556,10 @@ export default function Home() {
                       className="bg-white rounded-lg p-4 flex items-center justify-between shadow-md hover:shadow-lg transition-all"
                     >
                       <div className="flex-1">
-                        <h3 className="font-bold text-gray-800">{atracao.nome}</h3>
+                        <h3 className="font-bold text-gray-800">{atracao.titulo}</h3>
                         <p className="text-sm text-gray-600 flex items-center gap-2 mt-1">
                           <Clock size={14} />
-                          Tempo estimado: {atracao.tempoEscolhido}h
+                          Tempo estimado: {atracao.tempo_escolhido}h
                           <span className="text-xs text-gray-400">
                             ({ritmo === 'leve' ? 'máximo' : ritmo === 'moderada' ? 'médio' : 'mínimo'})
                           </span>
@@ -422,125 +577,68 @@ export default function Home() {
               </div>
             )}
 
-            {/* Seletor de Dias */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Calendar className="text-indigo-600" size={24} />
-                Roteiro Base - Selecione o Dia
-              </h2>
-              <div className="flex gap-3 flex-wrap">
-                {dadosRoteiro.roteiroGerado.map((_, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setDiaSelecionado(index + 1)}
-                    className={`px-6 py-3 rounded-lg font-semibold transition-all duration-300 ${
-                      diaSelecionado === index + 1
-                        ? 'bg-indigo-600 text-white shadow-lg scale-105'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                  >
-                    Dia {index + 1}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {/* Roteiro Otimizado */}
+            {roteiroOtimizado && (
+              <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl shadow-lg p-6 border-2 border-green-200">
+                <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2">
+                  <Check className="text-green-600" size={32} />
+                  Roteiro Otimizado
+                </h2>
 
-            {/* Roteiro do Dia */}
-            <div className="grid gap-6">
-              {/* Manhã */}
-              <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl shadow-lg p-6 border-l-4 border-yellow-500">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-yellow-500 p-3 rounded-full">
-                    <Sun className="text-white" size={24} />
+                {/* Avisos */}
+                {roteiroOtimizado.avisos.length > 0 && (
+                  <div className="bg-blue-50 rounded-lg p-4 mb-6">
+                    <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2">
+                      <AlertCircle size={18} />
+                      Avisos Importantes
+                    </h3>
+                    <ul className="space-y-1">
+                      {roteiroOtimizado.avisos.map((aviso, index) => (
+                        <li key={index} className="text-sm text-blue-700">• {aviso}</li>
+                      ))}
+                    </ul>
                   </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-800">Manhã</h3>
-                    <p className="text-sm text-gray-600 flex items-center gap-1">
-                      <Clock size={14} />
-                      08:00 - 12:00
+                )}
+
+                {/* Dias do Roteiro */}
+                <div className="space-y-6">
+                  {roteiroOtimizado.dias.map((dia) => (
+                    <div key={dia.dia} className="bg-white rounded-lg p-6 shadow-md">
+                      <h3 className="text-xl font-bold text-gray-800 mb-4">
+                        Dia {dia.dia} - {dia.tempo_total.toFixed(1)}h de atividades
+                      </h3>
+                      <div className="space-y-3">
+                        {dia.atividades.map((atividade) => (
+                          <div key={atividade.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                            <div className="flex-shrink-0">
+                              <div className="text-sm font-bold text-indigo-600">
+                                {atividade.inicio} - {atividade.fim}
+                              </div>
+                            </div>
+                            <div className="flex-1">
+                              <div className="font-semibold text-gray-800">{atividade.titulo}</div>
+                              <div className="text-xs text-gray-500">{atividade.tempo_medio}h de duração</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Pendentes Restantes */}
+                {roteiroOtimizado.pendentes.length > 0 && (
+                  <div className="mt-6 bg-yellow-50 rounded-lg p-4">
+                    <h3 className="font-bold text-yellow-800 mb-2">
+                      Atrações que não couberam no roteiro ({roteiroOtimizado.pendentes.length})
+                    </h3>
+                    <p className="text-sm text-yellow-700">
+                      Considere aumentar a duração da viagem ou escolher ritmo mais intenso.
                     </p>
                   </div>
-                </div>
-                <p className="text-gray-700 text-lg">{diaAtual.manha}</p>
+                )}
               </div>
-
-              {/* Almoço */}
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl shadow-lg p-6 border-l-4 border-green-500">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-green-500 p-3 rounded-full">
-                    <Utensils className="text-white" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-800">Almoço</h3>
-                    <p className="text-sm text-gray-600 flex items-center gap-1">
-                      <Clock size={14} />
-                      12:00 - 14:00
-                    </p>
-                  </div>
-                </div>
-                <p className="text-gray-700 text-lg">{diaAtual.almoco}</p>
-              </div>
-
-              {/* Tarde */}
-              <div className="bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-blue-500 p-3 rounded-full">
-                    <Coffee className="text-white" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-800">Tarde</h3>
-                    <p className="text-sm text-gray-600 flex items-center gap-1">
-                      <Clock size={14} />
-                      14:00 - 18:00
-                    </p>
-                  </div>
-                </div>
-                <p className="text-gray-700 text-lg">{diaAtual.tarde}</p>
-              </div>
-
-              {/* Jantar */}
-              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl shadow-lg p-6 border-l-4 border-purple-500">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-purple-500 p-3 rounded-full">
-                    <Moon className="text-white" size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-800">Jantar</h3>
-                    <p className="text-sm text-gray-600 flex items-center gap-1">
-                      <Clock size={14} />
-                      19:00 - 22:00
-                    </p>
-                  </div>
-                </div>
-                <p className="text-gray-700 text-lg">{diaAtual.jantar}</p>
-              </div>
-            </div>
-
-            {/* Navegação entre dias */}
-            <div className="flex justify-between items-center">
-              <button
-                onClick={() => setDiaSelecionado(Math.max(1, diaSelecionado - 1))}
-                disabled={diaSelecionado === 1}
-                className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-                  diaSelecionado === 1
-                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg'
-                }`}
-              >
-                ← Dia Anterior
-              </button>
-              <button
-                onClick={() => setDiaSelecionado(Math.min(dadosRoteiro.diasViagem, diaSelecionado + 1))}
-                disabled={diaSelecionado === dadosRoteiro.diasViagem}
-                className={`px-6 py-3 rounded-lg font-semibold transition-all ${
-                  diaSelecionado === dadosRoteiro.diasViagem
-                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg'
-                }`}
-              >
-                Próximo Dia →
-              </button>
-            </div>
+            )}
           </div>
         )}
 
@@ -550,18 +648,19 @@ export default function Home() {
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
                 <TreePine className="text-green-600" size={32} />
-                Parques e Atrações
+                Parques e Atrações em Gramado
               </h2>
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {ATRACOES_PARQUES.map((atracao) => {
-                  const jaAdicionada = atracoesPendentes.some(a => a.id === atracao.id);
+                {atracoesGramado.filter(a => a.categoria === 'parques').map((atracao) => {
+                  const jaAdicionada = atracoesPendentes.some(a => a.id === atracao.id) || 
+                                      atracoesAgendadas.some(a => a.id === atracao.id);
                   return (
                     <div
                       key={atracao.id}
                       className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-6 border border-green-200 hover:shadow-xl transition-all cursor-pointer"
                       onClick={() => !jaAdicionada && setAtracaoModal(atracao)}
                     >
-                      <h3 className="text-xl font-bold text-gray-800 mb-2">{atracao.nome}</h3>
+                      <h3 className="text-xl font-bold text-gray-800 mb-2">{atracao.titulo}</h3>
                       <p className="text-gray-600 mb-4 text-sm">{atracao.descricao}</p>
                       
                       {/* Tempo de duração */}
@@ -570,15 +669,15 @@ export default function Home() {
                         <div className="flex items-center justify-between text-sm">
                           <div className="text-center">
                             <div className="text-xs text-gray-500">Mín</div>
-                            <div className="font-bold text-green-600">{atracao.tempoMinimo}h</div>
+                            <div className="font-bold text-green-600">{atracao.tempo_minimo}h</div>
                           </div>
                           <div className="text-center">
                             <div className="text-xs text-gray-500">Médio</div>
-                            <div className="font-bold text-blue-600">{atracao.tempoMedio}h</div>
+                            <div className="font-bold text-blue-600">{atracao.tempo_medio}h</div>
                           </div>
                           <div className="text-center">
                             <div className="text-xs text-gray-500">Máx</div>
-                            <div className="font-bold text-orange-600">{atracao.tempoMaximo}h</div>
+                            <div className="font-bold text-orange-600">{atracao.tempo_maximo}h</div>
                           </div>
                         </div>
                       </div>
@@ -624,423 +723,129 @@ export default function Home() {
             <div className="bg-white rounded-xl shadow-lg p-6">
               <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
                 <Utensils className="text-orange-600" size={32} />
-                Gastronomia Local
+                Gastronomia em Gramado
               </h2>
               <div className="grid md:grid-cols-2 gap-6">
-                {/* Restaurante 1 */}
-                <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-6 border border-orange-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Colosseo Restaurante</h3>
-                  <p className="text-gray-600 mb-4">Culinária italiana autêntica com massas artesanais e ambiente acolhedor. Especialidade em risotos e carnes.</p>
-                  <div className="flex gap-4 text-sm text-gray-500">
-                    <div className="flex gap-1 items-center">
-                      <MapPin size={16} />
-                      <span>Centro de Gramado</span>
+                {atracoesGramado.filter(a => a.categoria === 'gastronomia').map((atracao) => {
+                  const jaAdicionada = atracoesPendentes.some(a => a.id === atracao.id) || 
+                                      atracoesAgendadas.some(a => a.id === atracao.id);
+                  return (
+                    <div
+                      key={atracao.id}
+                      className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-6 border border-orange-200 hover:shadow-xl transition-all cursor-pointer"
+                      onClick={() => !jaAdicionada && setAtracaoModal(atracao)}
+                    >
+                      <h3 className="text-xl font-bold text-gray-800 mb-2">{atracao.titulo}</h3>
+                      <p className="text-gray-600 mb-4">{atracao.descricao}</p>
+                      <div className="flex gap-4 text-sm text-gray-500 mb-4">
+                        <div className="flex gap-1 items-center">
+                          <MapPin size={16} />
+                          <span>{atracao.localizacao}</span>
+                        </div>
+                        <div className="flex gap-1 items-center">
+                          <Clock size={16} />
+                          <span>{atracao.horario}</span>
+                        </div>
+                      </div>
+                      {jaAdicionada ? (
+                        <div className="bg-green-100 text-green-700 px-4 py-2 rounded-lg text-center font-semibold text-sm">
+                          ✓ Adicionada ao roteiro
+                        </div>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAtracaoModal(atracao);
+                          }}
+                          className="w-full bg-gradient-to-r from-orange-600 to-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:from-orange-700 hover:to-red-700 transition-all flex items-center justify-center gap-2"
+                        >
+                          <Plus size={18} />
+                          Ver Detalhes
+                        </button>
+                      )}
                     </div>
-                    <div className="flex gap-1 items-center">
-                      <Clock size={16} />
-                      <span>12:00 - 23:00</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Restaurante 2 */}
-                <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-6 border border-orange-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Bouquet Garni</h3>
-                  <p className="text-gray-600 mb-4">Fondue completo (queijo, carne e chocolate) em ambiente romântico. Perfeito para casais e ocasiões especiais.</p>
-                  <div className="flex gap-4 text-sm text-gray-500">
-                    <div className="flex gap-1 items-center">
-                      <MapPin size={16} />
-                      <span>Av. Borges de Medeiros</span>
-                    </div>
-                    <div className="flex gap-1 items-center">
-                      <Clock size={16} />
-                      <span>19:00 - 23:30</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Restaurante 3 */}
-                <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-6 border border-orange-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Malbec Restaurante</h3>
-                  <p className="text-gray-600 mb-4">Carnes nobres grelhadas e carta de vinhos premiada. Ambiente sofisticado com vista panorâmica.</p>
-                  <div className="flex gap-4 text-sm text-gray-500">
-                    <div className="flex gap-1 items-center">
-                      <MapPin size={16} />
-                      <span>Rua Garibaldi, 152</span>
-                    </div>
-                    <div className="flex gap-1 items-center">
-                      <Clock size={16} />
-                      <span>18:00 - 23:00</span>
-                    </div>
-                  </div>
-                </div>
+                  );
+                })}
               </div>
             </div>
           </div>
         )}
 
-        {/* Seção: INSTAGRAMÁVEIS */}
+        {/* Outras seções mantidas como placeholders */}
         {secaoAtiva === 'instagramaveis' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-                <Camera className="text-pink-600" size={32} />
-                Lugares Instagramáveis
-              </h2>
-              <div className="grid md:grid-cols-3 gap-6">
-                {/* Local 1 */}
-                <div className="bg-gradient-to-br from-pink-50 to-purple-50 rounded-lg p-6 border border-pink-200 hover:shadow-xl transition-all">
-                  <div className="aspect-square bg-gradient-to-br from-pink-200 to-purple-200 rounded-lg mb-4 flex items-center justify-center">
-                    <Camera className="text-white" size={48} />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-800 mb-2">Lago Negro</h3>
-                  <p className="text-gray-600 text-sm">Lago com pedalinhos e paisagem europeia. Perfeito para fotos românticas e em família.</p>
-                </div>
-
-                {/* Local 2 */}
-                <div className="bg-gradient-to-br from-pink-50 to-purple-50 rounded-lg p-6 border border-pink-200 hover:shadow-xl transition-all">
-                  <div className="aspect-square bg-gradient-to-br from-pink-200 to-purple-200 rounded-lg mb-4 flex items-center justify-center">
-                    <Camera className="text-white" size={48} />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-800 mb-2">Rua Coberta</h3>
-                  <p className="text-gray-600 text-sm">Rua charmosa com lojas de chocolate e arquitetura europeia. Ideal para fotos durante o dia e à noite.</p>
-                </div>
-
-                {/* Local 3 */}
-                <div className="bg-gradient-to-br from-pink-50 to-purple-50 rounded-lg p-6 border border-pink-200 hover:shadow-xl transition-all">
-                  <div className="aspect-square bg-gradient-to-br from-pink-200 to-purple-200 rounded-lg mb-4 flex items-center justify-center">
-                    <Camera className="text-white" size={48} />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-800 mb-2">Le Jardin Parque de Lavanda</h3>
-                  <p className="text-gray-600 text-sm">Campos de lavanda com cenário de filme. Melhor época: primavera e verão para flores em plena floração.</p>
-                </div>
-              </div>
-            </div>
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Lugares Instagramáveis</h2>
+            <p className="text-gray-600">Em breve: lugares perfeitos para fotos em Gramado!</p>
           </div>
         )}
 
-        {/* Seção: HOSPEDAGEM */}
         {secaoAtiva === 'hospedagem' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-                <Hotel className="text-blue-600" size={32} />
-                Opções de Hospedagem
-              </h2>
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Hotel 1 */}
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-6 border border-blue-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Hotel Serra Azul</h3>
-                  <p className="text-gray-600 mb-4">Hotel 4 estrelas com café colonial incluso, piscina aquecida e spa. Localização central próxima às principais atrações.</p>
-                  <div className="flex flex-col gap-2 text-sm text-gray-500">
-                    <div className="flex gap-2 items-center">
-                      <MapPin size={16} />
-                      <span>Centro de Gramado - 500m da Rua Coberta</span>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <span className="font-semibold text-blue-600">A partir de R$ 450/noite</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Hotel 2 */}
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-6 border border-blue-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Pousada Vale dos Sonhos</h3>
-                  <p className="text-gray-600 mb-4">Pousada charmosa com arquitetura europeia, lareira e vista para as montanhas. Ambiente acolhedor e familiar.</p>
-                  <div className="flex flex-col gap-2 text-sm text-gray-500">
-                    <div className="flex gap-2 items-center">
-                      <MapPin size={16} />
-                      <span>Bairro Planalto - Vista panorâmica</span>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <span className="font-semibold text-blue-600">A partir de R$ 320/noite</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Hotel 3 */}
-                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-6 border border-blue-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Resort Baviera Premium</h3>
-                  <p className="text-gray-600 mb-4">Resort 5 estrelas all-inclusive com restaurantes, spa completo, quadras esportivas e kids club. Luxo e conforto total.</p>
-                  <div className="flex flex-col gap-2 text-sm text-gray-500">
-                    <div className="flex gap-2 items-center">
-                      <MapPin size={16} />
-                      <span>Zona rural - 8km do centro</span>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <span className="font-semibold text-blue-600">A partir de R$ 890/noite</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Opções de Hospedagem</h2>
+            <p className="text-gray-600">Em breve: melhores hotéis e pousadas de Gramado!</p>
           </div>
         )}
 
-        {/* Seção: ROTA DOS VINHOS */}
         {secaoAtiva === 'vinhos' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-                <Wine className="text-purple-600" size={32} />
-                Rota dos Vinhos
-              </h2>
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Vinícola 1 */}
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-6 border border-purple-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Vinícola Ravanello</h3>
-                  <p className="text-gray-600 mb-4">Vinhos premiados com degustação guiada. Especialidade em espumantes e tintos. Tour pelos parreirais incluído.</p>
-                  <div className="flex flex-col gap-2 text-sm text-gray-500">
-                    <div className="flex gap-2 items-center">
-                      <MapPin size={16} />
-                      <span>Bento Gonçalves - 40km de Gramado</span>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <Clock size={16} />
-                      <span>09:00 - 17:00 (Seg-Sáb)</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Vinícola 2 */}
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-6 border border-purple-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Casa Valduga</h3>
-                  <p className="text-gray-600 mb-4">Vinícola tradicional com restaurante gourmet. Experiência completa de enoturismo com harmonização de vinhos e pratos.</p>
-                  <div className="flex flex-col gap-2 text-sm text-gray-500">
-                    <div className="flex gap-2 items-center">
-                      <MapPin size={16} />
-                      <span>Vale dos Vinhedos - 45km de Gramado</span>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <Clock size={16} />
-                      <span>10:00 - 18:00 (Todos os dias)</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Vinícola 3 */}
-                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-lg p-6 border border-purple-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Vinícola Aurora</h3>
-                  <p className="text-gray-600 mb-4">Maior cooperativa vinícola do Brasil. Tour pela fábrica, degustação e loja com preços especiais. Ótimo custo-benefício.</p>
-                  <div className="flex flex-col gap-2 text-sm text-gray-500">
-                    <div className="flex gap-2 items-center">
-                      <MapPin size={16} />
-                      <span>Bento Gonçalves - 42km de Gramado</span>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <Clock size={16} />
-                      <span>08:00 - 17:30 (Seg-Sáb)</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Rota dos Vinhos</h2>
+            <p className="text-gray-600">Em breve: vinícolas e degustações próximas a Gramado!</p>
           </div>
         )}
 
-        {/* Seção: PASSEIO PELA CIDADE */}
         {secaoAtiva === 'cidade' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-                <Map className="text-indigo-600" size={32} />
-                Passeio pela Cidade
-              </h2>
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Ponto 1 */}
-                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg p-6 border border-indigo-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Rua Coberta</h3>
-                  <p className="text-gray-600 mb-4">Coração de Gramado com lojas de chocolate, malhas e souvenirs. Arquitetura charmosa e eventos culturais frequentes.</p>
-                  <div className="flex gap-2 items-center text-sm text-gray-500">
-                    <MapPin size={16} />
-                    <span>Centro - Av. Borges de Medeiros</span>
-                  </div>
-                </div>
-
-                {/* Ponto 2 */}
-                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg p-6 border border-indigo-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Catedral de Pedra (Canela)</h3>
-                  <p className="text-gray-600 mb-4">Igreja gótica construída em pedra com arquitetura impressionante. Símbolo da região e ponto turístico obrigatório.</p>
-                  <div className="flex gap-2 items-center text-sm text-gray-500">
-                    <MapPin size={16} />
-                    <span>Centro de Canela - 8km de Gramado</span>
-                  </div>
-                </div>
-
-                {/* Ponto 3 */}
-                <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-lg p-6 border border-indigo-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Praça Major Nicoletti</h3>
-                  <p className="text-gray-600 mb-4">Praça central com fonte luminosa, flores e eventos. Ponto de encontro e início de passeios pelo centro histórico.</p>
-                  <div className="flex gap-2 items-center text-sm text-gray-500">
-                    <MapPin size={16} />
-                    <span>Centro - Próximo à Rua Coberta</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Passeio pela Cidade</h2>
+            <p className="text-gray-600">Em breve: principais pontos turísticos do centro de Gramado!</p>
           </div>
         )}
 
-        {/* Seção: PASSEIOS KIDS */}
         {secaoAtiva === 'kids' && (
-          <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-3">
-                <Baby className="text-yellow-600" size={32} />
-                Passeios Kids
-              </h2>
-              <div className="grid md:grid-cols-2 gap-6">
-                {/* Atração 1 */}
-                <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg p-6 border border-yellow-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Aldeia do Papai Noel</h3>
-                  <p className="text-gray-600 mb-4">Casa do Papai Noel com decoração natalina o ano todo. Crianças podem tirar fotos e conhecer a fábrica de brinquedos.</p>
-                  <div className="flex flex-col gap-2 text-sm text-gray-500">
-                    <div className="flex gap-2 items-center">
-                      <span>👶 Idade recomendada: 2-10 anos</span>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <Clock size={16} />
-                      <span>Duração: 1h30min</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Atração 2 */}
-                <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg p-6 border border-yellow-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Reino do Chocolate</h3>
-                  <p className="text-gray-600 mb-4">Fábrica de chocolate com tour interativo. Crianças aprendem sobre o processo e podem fazer suas próprias criações.</p>
-                  <div className="flex flex-col gap-2 text-sm text-gray-500">
-                    <div className="flex gap-2 items-center">
-                      <span>👶 Idade recomendada: 4-12 anos</span>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <Clock size={16} />
-                      <span>Duração: 2h</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Atração 3 */}
-                <div className="bg-gradient-to-br from-yellow-50 to-orange-50 rounded-lg p-6 border border-yellow-200 hover:shadow-xl transition-all">
-                  <h3 className="text-xl font-bold text-gray-800 mb-2">Snowland Kids</h3>
-                  <p className="text-gray-600 mb-4">Área kids do Snowland com atividades na neve adaptadas para crianças. Trenó, bonecos de neve e diversão garantida.</p>
-                  <div className="flex flex-col gap-2 text-sm text-gray-500">
-                    <div className="flex gap-2 items-center">
-                      <span>👶 Idade recomendada: 3-12 anos</span>
-                    </div>
-                    <div className="flex gap-2 items-center">
-                      <Clock size={16} />
-                      <span>Duração: 3h</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">Passeios Kids</h2>
+            <p className="text-gray-600">Em breve: atrações perfeitas para crianças em Gramado!</p>
           </div>
         )}
 
-        {/* Seção: ROTEIRO GUIADO */}
         {secaoAtiva === 'premium' && (
-          <div className="space-y-6">
-            <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl shadow-2xl p-8 border-2 border-amber-300">
-              <div className="text-center mb-8">
-                <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-amber-400 to-yellow-500 rounded-full mb-4">
-                  <Crown className="text-white" size={40} />
-                </div>
-                <h2 className="text-3xl font-bold text-gray-800 mb-3">
-                  Roteiro Guiado
-                </h2>
-                <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                  Tenha acesso direto a mim e minha equipe para criar um roteiro personalizado e detalhado, 
-                  ajustado minuto a minuto para sua viagem perfeita.
-                </p>
+          <div className="bg-gradient-to-br from-amber-50 to-yellow-50 rounded-xl shadow-2xl p-8 border-2 border-amber-300">
+            <div className="text-center mb-8">
+              <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-amber-400 to-yellow-500 rounded-full mb-4">
+                <Crown className="text-white" size={40} />
               </div>
+              <h2 className="text-3xl font-bold text-gray-800 mb-3">
+                Roteiro Guiado
+              </h2>
+              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                Tenha acesso direto a mim e minha equipe para criar um roteiro personalizado e detalhado, 
+                ajustado minuto a minuto para sua viagem perfeita.
+              </p>
+            </div>
 
-              <div className="grid md:grid-cols-2 gap-6 mb-8">
-                <div className="bg-white rounded-lg p-6 shadow-md">
-                  <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
-                    <Clock className="text-amber-500" size={24} />
-                    O que está incluído
-                  </h3>
-                  <ul className="space-y-2 text-gray-600">
-                    <li className="flex items-start gap-2">
-                      <span className="text-green-500 mt-1">✓</span>
-                      <span>Consultoria personalizada via call</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-green-500 mt-1">✓</span>
-                      <span>Roteiro cronometrado minuto a minuto</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-green-500 mt-1">✓</span>
-                      <span>Reservas e indicações exclusivas</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-green-500 mt-1">✓</span>
-                      <span>Suporte durante toda a viagem</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-green-500 mt-1">✓</span>
-                      <span>Ajustes em tempo real</span>
-                    </li>
-                  </ul>
-                </div>
-
-                <div className="bg-white rounded-lg p-6 shadow-md">
-                  <h3 className="text-xl font-bold text-gray-800 mb-3 flex items-center gap-2">
-                    <Crown className="text-amber-500" size={24} />
-                    Diferenciais Premium
-                  </h3>
-                  <ul className="space-y-2 text-gray-600">
-                    <li className="flex items-start gap-2">
-                      <span className="text-amber-500 mt-1">★</span>
-                      <span>Acesso a lugares exclusivos</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-amber-500 mt-1">★</span>
-                      <span>Otimização de tempo e custos</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-amber-500 mt-1">★</span>
-                      <span>Dicas de insider local</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-amber-500 mt-1">★</span>
-                      <span>Roteiro adaptado ao seu perfil</span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-amber-500 mt-1">★</span>
-                      <span>Garantia de satisfação</span>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg p-8 shadow-md text-center">
-                <h3 className="text-2xl font-bold text-gray-800 mb-4">
-                  Entre em Contato
-                </h3>
-                <p className="text-gray-600 mb-6">
-                  Agende uma call gratuita de 15 minutos para conhecer o serviço e tirar suas dúvidas.
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  <a
-                    href="https://wa.me/5500000000000"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 bg-green-600 text-white px-8 py-4 rounded-lg font-bold text-lg hover:bg-green-700 transition-all shadow-lg hover:shadow-xl"
-                  >
-                    <Phone size={24} />
-                    WhatsApp
-                  </a>
-                  <a
-                    href="mailto:contato@seuroteiro.com"
-                    className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-8 py-4 rounded-lg font-bold text-lg hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl"
-                  >
-                    <Mail size={24} />
-                    E-mail
-                  </a>
-                </div>
+            <div className="bg-white rounded-lg p-8 shadow-md text-center">
+              <h3 className="text-2xl font-bold text-gray-800 mb-4">
+                Entre em Contato
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Agende uma call gratuita de 15 minutos para conhecer o serviço e tirar suas dúvidas.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <a
+                  href="https://wa.me/5500000000000"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 bg-green-600 text-white px-8 py-4 rounded-lg font-bold text-lg hover:bg-green-700 transition-all shadow-lg hover:shadow-xl"
+                >
+                  <Phone size={24} />
+                  WhatsApp
+                </a>
+                <a
+                  href="mailto:contato@seuroteiro.com"
+                  className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-8 py-4 rounded-lg font-bold text-lg hover:bg-indigo-700 transition-all shadow-lg hover:shadow-xl"
+                >
+                  <Mail size={24} />
+                  E-mail
+                </a>
               </div>
             </div>
           </div>
@@ -1054,7 +859,7 @@ export default function Home() {
             <div className="sticky top-0 bg-gradient-to-r from-green-600 to-emerald-600 text-white p-6 rounded-t-2xl">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h2 className="text-2xl font-bold mb-2">{atracaoModal.nome}</h2>
+                  <h2 className="text-2xl font-bold mb-2">{atracaoModal.titulo}</h2>
                   <div className="flex flex-col gap-2 text-green-50 text-sm">
                     <div className="flex items-center gap-2">
                       <Clock size={16} />
@@ -1095,21 +900,21 @@ export default function Home() {
                   <div className="text-center">
                     <div className="bg-white rounded-lg p-4 shadow-md">
                       <div className="text-xs text-gray-500 mb-1">MÍNIMO</div>
-                      <div className="text-3xl font-bold text-green-600">{atracaoModal.tempoMinimo}h</div>
+                      <div className="text-3xl font-bold text-green-600">{atracaoModal.tempo_minimo}h</div>
                       <div className="text-xs text-gray-500 mt-1">Visita rápida</div>
                     </div>
                   </div>
                   <div className="text-center">
                     <div className="bg-white rounded-lg p-4 shadow-md border-2 border-blue-400">
                       <div className="text-xs text-gray-500 mb-1">MÉDIO</div>
-                      <div className="text-3xl font-bold text-blue-600">{atracaoModal.tempoMedio}h</div>
+                      <div className="text-3xl font-bold text-blue-600">{atracaoModal.tempo_medio}h</div>
                       <div className="text-xs text-gray-500 mt-1">Recomendado</div>
                     </div>
                   </div>
                   <div className="text-center">
                     <div className="bg-white rounded-lg p-4 shadow-md">
                       <div className="text-xs text-gray-500 mb-1">MÁXIMO</div>
-                      <div className="text-3xl font-bold text-orange-600">{atracaoModal.tempoMaximo}h</div>
+                      <div className="text-3xl font-bold text-orange-600">{atracaoModal.tempo_maximo}h</div>
                       <div className="text-xs text-gray-500 mt-1">Aproveitar tudo</div>
                     </div>
                   </div>
@@ -1117,7 +922,7 @@ export default function Home() {
                 <div className="mt-4 text-sm text-gray-600 bg-white rounded-lg p-3">
                   <strong>Seu ritmo atual: {ritmo === 'leve' ? '🐢 Leve' : ritmo === 'moderada' ? '🚶 Moderada' : '🏃 Intensa'}</strong>
                   <br />
-                  Tempo que será usado: <strong>{ritmo === 'leve' ? atracaoModal.tempoMaximo : ritmo === 'moderada' ? atracaoModal.tempoMedio : atracaoModal.tempoMinimo}h</strong>
+                  Tempo que será usado: <strong>{ritmo === 'leve' ? atracaoModal.tempo_maximo : ritmo === 'moderada' ? atracaoModal.tempo_medio : atracaoModal.tempo_minimo}h</strong>
                 </div>
               </div>
 
