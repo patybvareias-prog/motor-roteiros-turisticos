@@ -25,7 +25,10 @@ import {
   Zap,
   TrendingUp,
   Check,
-  AlertCircle
+  AlertCircle,
+  GripVertical,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 
 // ===== TIPOS E INTERFACES =====
@@ -37,14 +40,15 @@ interface Atracao {
   titulo: string;
   descricao: string;
   categoria: string;
-  city: string; // CRÍTICO: filtro por cidade
+  city: string;
   horario: string;
   localizacao: string;
-  tempo_minimo: number; // em horas
+  tempo_minimo: number;
   tempo_medio: number;
   tempo_maximo: number;
   detalhes?: string;
   dicas?: string[];
+  subcategoria?: string; // Para identificar "Almoço" em gastronomia
 }
 
 interface AtracaoSelecionada extends Atracao {
@@ -57,6 +61,9 @@ interface AtividadeAgendada {
   tempo_medio: number;
   inicio: string;
   fim: string;
+  categoria: string;
+  subcategoria?: string;
+  isNoturno?: boolean; // Gastronomia noturna não consome tempo
 }
 
 interface DiaRoteiro {
@@ -117,7 +124,7 @@ const ATRACOES_DISPONIVEIS: Atracao[] = [
     titulo: 'Parque do Caracol',
     descricao: 'Cascata de 131 metros de altura com trilhas ecológicas e mirantes. Vista espetacular da natureza da Serra Gaúcha.',
     categoria: 'parques',
-    city: 'Canela', // NÃO É GRAMADO - deve ser filtrado
+    city: 'Canela',
     horario: '08:30 - 17:30',
     localizacao: 'Rodovia RS-466, Canela',
     tempo_minimo: 1.5,
@@ -142,7 +149,8 @@ const ATRACOES_DISPONIVEIS: Atracao[] = [
     localizacao: 'Centro de Gramado',
     tempo_minimo: 1,
     tempo_medio: 1.5,
-    tempo_maximo: 2
+    tempo_maximo: 2,
+    subcategoria: 'Almoço'
   },
   {
     id: 'bouquet',
@@ -155,6 +163,18 @@ const ATRACOES_DISPONIVEIS: Atracao[] = [
     tempo_minimo: 1.5,
     tempo_medio: 2,
     tempo_maximo: 3
+  },
+  {
+    id: 'casa_di_paolo',
+    titulo: 'Casa di Paolo',
+    descricao: 'Restaurante italiano com vista panorâmica. Especialidade em massas frescas e vinhos selecionados.',
+    categoria: 'gastronomia',
+    city: 'Gramado',
+    horario: '12:00 - 23:00',
+    localizacao: 'Rua São Pedro, 123',
+    tempo_minimo: 1,
+    tempo_medio: 1.5,
+    tempo_maximo: 2
   }
 ];
 
@@ -166,7 +186,7 @@ export default function Home() {
   const [atracoesAgendadas, setAtracoesAgendadas] = useState<AtracaoSelecionada[]>([]);
   const [ritmo, setRitmo] = useState<Ritmo>('moderada');
   const [roteiroOtimizado, setRoteiroOtimizado] = useState<RoteiroOtimizado | null>(null);
-  const [duracaoViagem, setDuracaoViagem] = useState(3); // dias
+  const [duracaoViagem, setDuracaoViagem] = useState(3);
   const [carregandoOtimizacao, setCarregandoOtimizacao] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -175,15 +195,19 @@ export default function Home() {
 
   // ===== CÁLCULO DO TEMPO DISPONÍVEL =====
   const calcularTempoDisponivel = () => {
-    // 8h por dia (9h-17h) - 1h almoço = 7h úteis por dia
     const horasPorDia = 7;
     const totalHoras = horasPorDia * duracaoViagem;
     
-    // Soma o tempo das atrações pendentes + agendadas
-    const horasUsadas = [...atracoesPendentes, ...atracoesAgendadas].reduce(
-      (acc, atracao) => acc + atracao.tempo_escolhido, 
-      0
-    );
+    // Soma apenas atrações que NÃO são gastronomia noturna (sem subcategoria Almoço)
+    const horasUsadas = [...atracoesPendentes, ...atracoesAgendadas]
+      .filter(atracao => {
+        // Gastronomia sem subcategoria "Almoço" = noturna (não consome tempo)
+        if (atracao.categoria === 'gastronomia' && atracao.subcategoria !== 'Almoço') {
+          return false;
+        }
+        return true;
+      })
+      .reduce((acc, atracao) => acc + atracao.tempo_escolhido, 0);
     
     return {
       total: totalHoras,
@@ -197,7 +221,6 @@ export default function Home() {
 
   // ===== ADICIONAR ATRAÇÃO AOS PENDENTES =====
   const adicionarAtracao = (atracao: Atracao) => {
-    // Validação: só aceita atrações de Gramado
     if (atracao.city !== 'Gramado') {
       setErro('Apenas atrações de Gramado podem ser adicionadas ao roteiro.');
       setTimeout(() => setErro(null), 3000);
@@ -208,6 +231,11 @@ export default function Home() {
     let tempo_escolhido = atracao.tempo_medio;
     if (ritmo === 'leve') tempo_escolhido = atracao.tempo_maximo;
     if (ritmo === 'intensa') tempo_escolhido = atracao.tempo_minimo;
+
+    // Se for gastronomia com subcategoria "Almoço", força 1h
+    if (atracao.categoria === 'gastronomia' && atracao.subcategoria === 'Almoço') {
+      tempo_escolhido = 1;
+    }
 
     const novaAtracao: AtracaoSelecionada = {
       ...atracao,
@@ -235,7 +263,6 @@ export default function Home() {
     setErro(null);
 
     try {
-      // Preparar JSON de entrada conforme especificação
       const entrada = {
         tipo_requisicao: 'otimizar',
         duracao_viagem: duracaoViagem,
@@ -245,7 +272,8 @@ export default function Home() {
           titulo: a.titulo,
           categoria: a.categoria,
           tempo_medio: a.tempo_medio,
-          city: a.city
+          city: a.city,
+          subcategoria: a.subcategoria
         })),
         atracoes_pendentes: atracoesPendentes.map(a => a.id),
         atracoes_agendadas: atracoesAgendadas.map(a => ({
@@ -255,14 +283,12 @@ export default function Home() {
         }))
       };
 
-      // Simular chamada à API (substituir por chamada real)
       const response = await simularChamadaIA(entrada);
 
       if (response.error) {
         setErro(response.error);
       } else {
         setRoteiroOtimizado(response);
-        // Move pendentes para agendados
         setAtracoesAgendadas([...atracoesAgendadas, ...atracoesPendentes]);
         setAtracoesPendentes([]);
       }
@@ -274,12 +300,10 @@ export default function Home() {
     }
   };
 
-  // ===== SIMULAÇÃO DE CHAMADA À IA (Substituir por API real) =====
+  // ===== SIMULAÇÃO DE CHAMADA À IA =====
   const simularChamadaIA = async (entrada: any): Promise<RoteiroOtimizado | { error: string }> => {
-    // Simula delay de API
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // Validação: se nenhuma atração for de Gramado
     const atracoesGramadoCount = entrada.atracoes_disponiveis.filter(
       (a: any) => a.city === 'Gramado'
     ).length;
@@ -288,23 +312,39 @@ export default function Home() {
       return { error: 'Sem atrações de Gramado' };
     }
 
-    // Simula resposta da IA
     const diasRoteiro: DiaRoteiro[] = [];
-    let horaInicio = 9; // 9h da manhã
 
     for (let dia = 1; dia <= entrada.duracao_viagem; dia++) {
       const atividadesDia: AtividadeAgendada[] = [];
       let tempoTotalDia = 0;
+      let horaInicio = 9;
 
-      // Pega algumas atrações pendentes para este dia
       const atracoesDia = entrada.atracoes_pendentes.slice(
-        (dia - 1) * 2, 
-        dia * 2
+        (dia - 1) * 3, 
+        dia * 3
       );
 
+      // Primeiro, adiciona almoços às 12h
       atracoesDia.forEach((idAtracao: string) => {
         const atracao = atracoesPendentes.find(a => a.id === idAtracao);
-        if (atracao && tempoTotalDia + atracao.tempo_escolhido <= 7) {
+        if (atracao && atracao.categoria === 'gastronomia' && atracao.subcategoria === 'Almoço') {
+          atividadesDia.push({
+            id: atracao.id,
+            titulo: atracao.titulo,
+            tempo_medio: 1,
+            inicio: '12:00',
+            fim: '13:00',
+            categoria: atracao.categoria,
+            subcategoria: atracao.subcategoria
+          });
+          tempoTotalDia += 1;
+        }
+      });
+
+      // Depois, adiciona outras atrações (exceto gastronomia)
+      atracoesDia.forEach((idAtracao: string) => {
+        const atracao = atracoesPendentes.find(a => a.id === idAtracao);
+        if (atracao && atracao.categoria !== 'gastronomia' && tempoTotalDia + atracao.tempo_escolhido <= 7) {
           const inicio = `${Math.floor(horaInicio)}:${(horaInicio % 1) * 60 || '00'}`;
           horaInicio += atracao.tempo_escolhido;
           const fim = `${Math.floor(horaInicio)}:${(horaInicio % 1) * 60 || '00'}`;
@@ -314,10 +354,28 @@ export default function Home() {
             titulo: atracao.titulo,
             tempo_medio: atracao.tempo_escolhido,
             inicio,
-            fim
+            fim,
+            categoria: atracao.categoria
           });
 
           tempoTotalDia += atracao.tempo_escolhido;
+        }
+      });
+
+      // Por fim, adiciona gastronomia noturna (19h-22h) - NÃO consome tempo
+      atracoesDia.forEach((idAtracao: string) => {
+        const atracao = atracoesPendentes.find(a => a.id === idAtracao);
+        if (atracao && atracao.categoria === 'gastronomia' && atracao.subcategoria !== 'Almoço') {
+          atividadesDia.push({
+            id: atracao.id,
+            titulo: atracao.titulo,
+            tempo_medio: atracao.tempo_escolhido,
+            inicio: '19:00',
+            fim: '22:00',
+            categoria: atracao.categoria,
+            isNoturno: true
+          });
+          // NÃO adiciona ao tempo total
         }
       });
 
@@ -326,19 +384,82 @@ export default function Home() {
         atividades: atividadesDia,
         tempo_total: tempoTotalDia
       });
-
-      horaInicio = 9; // Reset para próximo dia
     }
 
     return {
       dias: diasRoteiro,
-      pendentes: entrada.atracoes_pendentes.slice(entrada.duracao_viagem * 2),
+      pendentes: entrada.atracoes_pendentes.slice(entrada.duracao_viagem * 3),
       avisos: [
         'Roteiro otimizado considerando horários de funcionamento',
-        'Lembre-se de reservar restaurantes com antecedência',
+        'Restaurantes noturnos (19h-22h) não consomem tempo do roteiro',
+        'Almoços agendados automaticamente às 12h com 1h de duração',
         'Tempo de deslocamento não incluído - adicione 15-30min entre atrações'
       ]
     };
+  };
+
+  // ===== FUNÇÕES DE EDIÇÃO DO ROTEIRO =====
+  const alterarDuracaoAtividade = (diaIndex: number, atividadeId: string, novaDuracao: number) => {
+    if (!roteiroOtimizado) return;
+
+    const novoRoteiro = { ...roteiroOtimizado };
+    const dia = novoRoteiro.dias[diaIndex];
+    const atividadeIndex = dia.atividades.findIndex(a => a.id === atividadeId);
+    
+    if (atividadeIndex === -1) return;
+
+    const atividade = dia.atividades[atividadeIndex];
+    const diferencaTempo = novaDuracao - atividade.tempo_medio;
+
+    // Atualiza duração
+    atividade.tempo_medio = novaDuracao;
+
+    // Recalcula horários subsequentes
+    const [horaInicio, minInicio] = atividade.inicio.split(':').map(Number);
+    const novaHoraFim = horaInicio + novaDuracao;
+    atividade.fim = `${Math.floor(novaHoraFim)}:${Math.round((novaHoraFim % 1) * 60).toString().padStart(2, '0')}`;
+
+    // Atualiza tempo total do dia (se não for noturno)
+    if (!atividade.isNoturno) {
+      dia.tempo_total += diferencaTempo;
+    }
+
+    setRoteiroOtimizado(novoRoteiro);
+  };
+
+  const alterarHorarioAtividade = (diaIndex: number, atividadeId: string, novoHorario: string) => {
+    if (!roteiroOtimizado) return;
+
+    const novoRoteiro = { ...roteiroOtimizado };
+    const dia = novoRoteiro.dias[diaIndex];
+    const atividadeIndex = dia.atividades.findIndex(a => a.id === atividadeId);
+    
+    if (atividadeIndex === -1) return;
+
+    const atividade = dia.atividades[atividadeIndex];
+    const [novaHora, novoMin] = novoHorario.split(':').map(Number);
+    const novaHoraFim = novaHora + atividade.tempo_medio;
+
+    atividade.inicio = novoHorario;
+    atividade.fim = `${Math.floor(novaHoraFim)}:${Math.round((novaHoraFim % 1) * 60).toString().padStart(2, '0')}`;
+
+    setRoteiroOtimizado(novoRoteiro);
+  };
+
+  const moverAtividade = (diaIndex: number, atividadeIndex: number, direcao: 'up' | 'down') => {
+    if (!roteiroOtimizado) return;
+
+    const novoRoteiro = { ...roteiroOtimizado };
+    const dia = novoRoteiro.dias[diaIndex];
+    const novoIndex = direcao === 'up' ? atividadeIndex - 1 : atividadeIndex + 1;
+
+    if (novoIndex < 0 || novoIndex >= dia.atividades.length) return;
+
+    // Troca posições
+    [dia.atividades[atividadeIndex], dia.atividades[novoIndex]] = 
+    [dia.atividades[novoIndex], dia.atividades[atividadeIndex]];
+
+    setRoteiroOtimizado(novoRoteiro);
   };
 
   // ===== NAVEGAÇÃO =====
@@ -515,6 +636,8 @@ export default function Home() {
                 </div>
                 <p className="text-xs text-gray-500">
                   * Cálculo baseado em 7h úteis por dia (9h-17h, descontando 1h de almoço)
+                  <br />
+                  * Gastronomia noturna (19h-22h) não consome tempo do roteiro
                 </p>
               </div>
             </div>
@@ -559,10 +682,18 @@ export default function Home() {
                         <h3 className="font-bold text-gray-800">{atracao.titulo}</h3>
                         <p className="text-sm text-gray-600 flex items-center gap-2 mt-1">
                           <Clock size={14} />
-                          Tempo estimado: {atracao.tempo_escolhido}h
-                          <span className="text-xs text-gray-400">
-                            ({ritmo === 'leve' ? 'máximo' : ritmo === 'moderada' ? 'médio' : 'mínimo'})
-                          </span>
+                          {atracao.categoria === 'gastronomia' && atracao.subcategoria === 'Almoço' ? (
+                            <>Almoço às 12h (1h de duração)</>
+                          ) : atracao.categoria === 'gastronomia' ? (
+                            <>Jantar noturno 19h-22h (não consome tempo)</>
+                          ) : (
+                            <>
+                              Tempo estimado: {atracao.tempo_escolhido}h
+                              <span className="text-xs text-gray-400">
+                                ({ritmo === 'leve' ? 'máximo' : ritmo === 'moderada' ? 'médio' : 'mínimo'})
+                              </span>
+                            </>
+                          )}
                         </p>
                       </div>
                       <button
@@ -602,22 +733,78 @@ export default function Home() {
 
                 {/* Dias do Roteiro */}
                 <div className="space-y-6">
-                  {roteiroOtimizado.dias.map((dia) => (
+                  {roteiroOtimizado.dias.map((dia, diaIndex) => (
                     <div key={dia.dia} className="bg-white rounded-lg p-6 shadow-md">
                       <h3 className="text-xl font-bold text-gray-800 mb-4">
                         Dia {dia.dia} - {dia.tempo_total.toFixed(1)}h de atividades
                       </h3>
                       <div className="space-y-3">
-                        {dia.atividades.map((atividade) => (
-                          <div key={atividade.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
-                            <div className="flex-shrink-0">
-                              <div className="text-sm font-bold text-indigo-600">
-                                {atividade.inicio} - {atividade.fim}
+                        {dia.atividades.map((atividade, atividadeIndex) => (
+                          <div key={atividade.id} className={`p-4 rounded-lg border-2 ${
+                            atividade.isNoturno 
+                              ? 'bg-purple-50 border-purple-200' 
+                              : atividade.subcategoria === 'Almoço'
+                              ? 'bg-orange-50 border-orange-200'
+                              : 'bg-gray-50 border-gray-200'
+                          }`}>
+                            <div className="flex items-start gap-4">
+                              {/* Controles de Movimento */}
+                              <div className="flex flex-col gap-1">
+                                <button
+                                  onClick={() => moverAtividade(diaIndex, atividadeIndex, 'up')}
+                                  disabled={atividadeIndex === 0}
+                                  className="p-1 hover:bg-gray-200 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                  <ChevronUp size={16} />
+                                </button>
+                                <GripVertical size={16} className="text-gray-400" />
+                                <button
+                                  onClick={() => moverAtividade(diaIndex, atividadeIndex, 'down')}
+                                  disabled={atividadeIndex === dia.atividades.length - 1}
+                                  className="p-1 hover:bg-gray-200 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                  <ChevronDown size={16} />
+                                </button>
                               </div>
-                            </div>
-                            <div className="flex-1">
-                              <div className="font-semibold text-gray-800">{atividade.titulo}</div>
-                              <div className="text-xs text-gray-500">{atividade.tempo_medio}h de duração</div>
+
+                              {/* Informações da Atividade */}
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <input
+                                    type="time"
+                                    value={atividade.inicio}
+                                    onChange={(e) => alterarHorarioAtividade(diaIndex, atividade.id, e.target.value)}
+                                    className="px-2 py-1 border border-gray-300 rounded text-sm font-semibold text-indigo-600"
+                                  />
+                                  <span className="text-gray-400">-</span>
+                                  <span className="text-sm font-semibold text-gray-600">{atividade.fim}</span>
+                                  {atividade.isNoturno && (
+                                    <span className="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded-full font-semibold">
+                                      🌙 Noturno (não consome tempo)
+                                    </span>
+                                  )}
+                                  {atividade.subcategoria === 'Almoço' && (
+                                    <span className="text-xs bg-orange-200 text-orange-800 px-2 py-1 rounded-full font-semibold">
+                                      🍽️ Almoço
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="font-semibold text-gray-800 mb-1">{atividade.titulo}</div>
+                                <div className="flex items-center gap-3">
+                                  <label className="text-xs text-gray-500">Duração:</label>
+                                  <input
+                                    type="number"
+                                    step="0.5"
+                                    min="0.5"
+                                    max="8"
+                                    value={atividade.tempo_medio}
+                                    onChange={(e) => alterarDuracaoAtividade(diaIndex, atividade.id, parseFloat(e.target.value))}
+                                    className="w-16 px-2 py-1 border border-gray-300 rounded text-sm"
+                                    disabled={atividade.isNoturno || atividade.subcategoria === 'Almoço'}
+                                  />
+                                  <span className="text-xs text-gray-500">horas</span>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -663,7 +850,6 @@ export default function Home() {
                       <h3 className="text-xl font-bold text-gray-800 mb-2">{atracao.titulo}</h3>
                       <p className="text-gray-600 mb-4 text-sm">{atracao.descricao}</p>
                       
-                      {/* Tempo de duração */}
                       <div className="bg-white rounded-lg p-3 mb-4">
                         <div className="text-xs font-semibold text-gray-500 mb-2">DURAÇÃO RECOMENDADA</div>
                         <div className="flex items-center justify-between text-sm">
@@ -725,17 +911,39 @@ export default function Home() {
                 <Utensils className="text-orange-600" size={32} />
                 Gastronomia em Gramado
               </h2>
+              <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg mb-6">
+                <p className="text-sm text-blue-800">
+                  <strong>💡 Dica:</strong> Restaurantes com almoço são agendados automaticamente às 12h (1h de duração). 
+                  Restaurantes noturnos são agendados das 19h às 22h e não consomem tempo do seu roteiro diurno!
+                </p>
+              </div>
               <div className="grid md:grid-cols-2 gap-6">
                 {atracoesGramado.filter(a => a.categoria === 'gastronomia').map((atracao) => {
                   const jaAdicionada = atracoesPendentes.some(a => a.id === atracao.id) || 
                                       atracoesAgendadas.some(a => a.id === atracao.id);
+                  const isAlmoco = atracao.subcategoria === 'Almoço';
                   return (
                     <div
                       key={atracao.id}
-                      className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-6 border border-orange-200 hover:shadow-xl transition-all cursor-pointer"
+                      className={`rounded-lg p-6 border-2 hover:shadow-xl transition-all cursor-pointer ${
+                        isAlmoco 
+                          ? 'bg-gradient-to-br from-orange-50 to-amber-50 border-orange-200'
+                          : 'bg-gradient-to-br from-purple-50 to-indigo-50 border-purple-200'
+                      }`}
                       onClick={() => !jaAdicionada && setAtracaoModal(atracao)}
                     >
-                      <h3 className="text-xl font-bold text-gray-800 mb-2">{atracao.titulo}</h3>
+                      <div className="flex items-start justify-between mb-2">
+                        <h3 className="text-xl font-bold text-gray-800">{atracao.titulo}</h3>
+                        {isAlmoco ? (
+                          <span className="text-xs bg-orange-200 text-orange-800 px-2 py-1 rounded-full font-semibold">
+                            🍽️ Almoço
+                          </span>
+                        ) : (
+                          <span className="text-xs bg-purple-200 text-purple-800 px-2 py-1 rounded-full font-semibold">
+                            🌙 Noturno
+                          </span>
+                        )}
+                      </div>
                       <p className="text-gray-600 mb-4">{atracao.descricao}</p>
                       <div className="flex gap-4 text-sm text-gray-500 mb-4">
                         <div className="flex gap-1 items-center">
@@ -747,6 +955,20 @@ export default function Home() {
                           <span>{atracao.horario}</span>
                         </div>
                       </div>
+                      {isAlmoco && (
+                        <div className="bg-white rounded-lg p-3 mb-4 text-sm">
+                          <strong className="text-orange-700">Agendamento automático:</strong>
+                          <br />
+                          <span className="text-gray-600">12:00 - 13:00 (1h de duração)</span>
+                        </div>
+                      )}
+                      {!isAlmoco && (
+                        <div className="bg-white rounded-lg p-3 mb-4 text-sm">
+                          <strong className="text-purple-700">Período noturno:</strong>
+                          <br />
+                          <span className="text-gray-600">19:00 - 22:00 (não consome tempo do roteiro)</span>
+                        </div>
+                      )}
                       {jaAdicionada ? (
                         <div className="bg-green-100 text-green-700 px-4 py-2 rounded-lg text-center font-semibold text-sm">
                           ✓ Adicionada ao roteiro
@@ -757,7 +979,11 @@ export default function Home() {
                             e.stopPropagation();
                             setAtracaoModal(atracao);
                           }}
-                          className="w-full bg-gradient-to-r from-orange-600 to-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:from-orange-700 hover:to-red-700 transition-all flex items-center justify-center gap-2"
+                          className={`w-full text-white px-4 py-2 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${
+                            isAlmoco
+                              ? 'bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700'
+                              : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700'
+                          }`}
                         >
                           <Plus size={18} />
                           Ver Detalhes
@@ -890,41 +1116,88 @@ export default function Home() {
                 )}
               </div>
 
-              {/* Tempo de Duração */}
-              <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-6">
-                <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                  <Timer className="text-blue-600" size={20} />
-                  Tempo Recomendado de Visita
-                </h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center">
-                    <div className="bg-white rounded-lg p-4 shadow-md">
-                      <div className="text-xs text-gray-500 mb-1">MÍNIMO</div>
-                      <div className="text-3xl font-bold text-green-600">{atracaoModal.tempo_minimo}h</div>
-                      <div className="text-xs text-gray-500 mt-1">Visita rápida</div>
+              {/* Informações de Agendamento para Gastronomia */}
+              {atracaoModal.categoria === 'gastronomia' && (
+                <div className={`rounded-lg p-4 ${
+                  atracaoModal.subcategoria === 'Almoço'
+                    ? 'bg-orange-50 border-2 border-orange-200'
+                    : 'bg-purple-50 border-2 border-purple-200'
+                }`}>
+                  <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2">
+                    <Clock className={atracaoModal.subcategoria === 'Almoço' ? 'text-orange-600' : 'text-purple-600'} size={20} />
+                    Agendamento Automático
+                  </h3>
+                  {atracaoModal.subcategoria === 'Almoço' ? (
+                    <div className="space-y-2">
+                      <p className="text-gray-700">
+                        <strong>Horário:</strong> 12:00 - 13:00
+                      </p>
+                      <p className="text-gray-700">
+                        <strong>Duração:</strong> 1 hora (fixo)
+                      </p>
+                      <p className="text-sm text-gray-600 mt-2">
+                        ✓ Será inserido automaticamente no horário de almoço
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        ✓ Consome 1h do tempo disponível do dia
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-gray-700">
+                        <strong>Período:</strong> Noturno (19:00 - 22:00)
+                      </p>
+                      <p className="text-gray-700">
+                        <strong>Duração:</strong> {atracaoModal.tempo_medio}h
+                      </p>
+                      <p className="text-sm text-gray-600 mt-2">
+                        ✓ Será agendado no período noturno
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        ✓ NÃO consome tempo do roteiro diurno
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tempo de Duração (apenas para não-gastronomia) */}
+              {atracaoModal.categoria !== 'gastronomia' && (
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-6">
+                  <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <Timer className="text-blue-600" size={20} />
+                    Tempo Recomendado de Visita
+                  </h3>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <div className="bg-white rounded-lg p-4 shadow-md">
+                        <div className="text-xs text-gray-500 mb-1">MÍNIMO</div>
+                        <div className="text-3xl font-bold text-green-600">{atracaoModal.tempo_minimo}h</div>
+                        <div className="text-xs text-gray-500 mt-1">Visita rápida</div>
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="bg-white rounded-lg p-4 shadow-md border-2 border-blue-400">
+                        <div className="text-xs text-gray-500 mb-1">MÉDIO</div>
+                        <div className="text-3xl font-bold text-blue-600">{atracaoModal.tempo_medio}h</div>
+                        <div className="text-xs text-gray-500 mt-1">Recomendado</div>
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="bg-white rounded-lg p-4 shadow-md">
+                        <div className="text-xs text-gray-500 mb-1">MÁXIMO</div>
+                        <div className="text-3xl font-bold text-orange-600">{atracaoModal.tempo_maximo}h</div>
+                        <div className="text-xs text-gray-500 mt-1">Aproveitar tudo</div>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-center">
-                    <div className="bg-white rounded-lg p-4 shadow-md border-2 border-blue-400">
-                      <div className="text-xs text-gray-500 mb-1">MÉDIO</div>
-                      <div className="text-3xl font-bold text-blue-600">{atracaoModal.tempo_medio}h</div>
-                      <div className="text-xs text-gray-500 mt-1">Recomendado</div>
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <div className="bg-white rounded-lg p-4 shadow-md">
-                      <div className="text-xs text-gray-500 mb-1">MÁXIMO</div>
-                      <div className="text-3xl font-bold text-orange-600">{atracaoModal.tempo_maximo}h</div>
-                      <div className="text-xs text-gray-500 mt-1">Aproveitar tudo</div>
-                    </div>
+                  <div className="mt-4 text-sm text-gray-600 bg-white rounded-lg p-3">
+                    <strong>Seu ritmo atual: {ritmo === 'leve' ? '🐢 Leve' : ritmo === 'moderada' ? '🚶 Moderada' : '🏃 Intensa'}</strong>
+                    <br />
+                    Tempo que será usado: <strong>{ritmo === 'leve' ? atracaoModal.tempo_maximo : ritmo === 'moderada' ? atracaoModal.tempo_medio : atracaoModal.tempo_minimo}h</strong>
                   </div>
                 </div>
-                <div className="mt-4 text-sm text-gray-600 bg-white rounded-lg p-3">
-                  <strong>Seu ritmo atual: {ritmo === 'leve' ? '🐢 Leve' : ritmo === 'moderada' ? '🚶 Moderada' : '🏃 Intensa'}</strong>
-                  <br />
-                  Tempo que será usado: <strong>{ritmo === 'leve' ? atracaoModal.tempo_maximo : ritmo === 'moderada' ? atracaoModal.tempo_medio : atracaoModal.tempo_minimo}h</strong>
-                </div>
-              </div>
+              )}
 
               {/* Dicas */}
               {atracaoModal.dicas && atracaoModal.dicas.length > 0 && (
